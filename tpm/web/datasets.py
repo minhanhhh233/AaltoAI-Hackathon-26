@@ -12,17 +12,6 @@ import os
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 DATASETS = {
-    "te_process": {
-        "display_name": "Tennessee Eastman Process",
-        "filepath": os.path.join(PROJECT_ROOT, "te_process_normal.csv"),
-        "description": (
-            "500 independent time-series runs, 52 numeric variables per run — "
-            "treated as the normal/baseline dataset for this analysis. What "
-            "each variable represents and what process this data comes from "
-            "aren't given; the analysis below infers what it can from the "
-            "data itself."
-        ),
-    },
     "te_process_train_100": {
         "display_name": "Tennessee Eastman Process (100-run sample)",
         "filepath": os.path.join(PROJECT_ROOT, "te_process_normal_train.csv"),

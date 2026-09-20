@@ -20,6 +20,9 @@ tpm/README_old.md
 # Large source data files (too big for git; keep the small sample CSVs)
 te_process_normal_train.csv
 
+# Demo video (427MB — hosted on YouTube instead, linked from README)
+Demo.mp4
+
 # OS / editor
 .DS_Store
 Thumbs.db

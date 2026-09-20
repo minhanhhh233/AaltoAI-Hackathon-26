@@ -4,6 +4,8 @@ A general-purpose statistical analysis pipeline for **numeric, multi-run tabular
 
 TPM takes raw datasets, builds a statistical baseline, detects changes in new data, and uses an LLM to help explain what the analysis may mean.
 
+**[Watch the demo](https://youtu.be/RfT0fCZjg3s)**
+
 ## What it does
 
 | Layer | Purpose | Main output |
