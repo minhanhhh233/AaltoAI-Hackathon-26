@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+{% block title %}{{ dataset.display_name }} — Anomoly McAnomolyface{% endblock %}
+{% set active = "dashboard" %}
+{% block content %}
+
+<h1>{{ dataset.display_name }}</h1>
+<p class="subtitle">{{ dataset.description }}</p>
+
+{% if not ready %}
+  <div class="card">
+    <h2>Build the baseline analysis</h2>
+    <p class="muted">
+      Runs Layer 0 (ingestion) → Layer 1 (statistical profiling) → Layer 2
+      (correlation, clustering, causal discovery) → Layer 4 (LLM
+      interpretation) on a random sample of this dataset's normal runs.
+      Causal discovery (PCMCI) is the slowest step — it can be skipped for a
+      faster build.
+    </p>
+
+    <form id="build-form" data-dataset="{{ name }}">
+      <div class="field">
+        <label for="n_runs">Number of runs to analyze</label>
+        <input type="number" id="n_runs" min="1" max="500" value="3">
+        <div class="hint">Chosen randomly from the dataset's available runs. Kept small by default so the demo stays responsive — more runs = a more thorough (slower) analysis.</div>
+      </div>
+      <div class="checkbox-field">
+        <input type="checkbox" id="include_causal" checked>
+        <label for="include_causal">Include causal discovery (PCMCI) — slower, but needed for the causal graph and root-cause analysis</label>
+      </div>
+      <button type="submit" class="btn" id="build-submit">Build analysis</button>
+    </form>
+
+    <div id="build-progress" hidden>
+      <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+      <div class="progress-message" id="progress-message">Starting…</div>
+    </div>
+    <div id="build-error" class="alert alert-error" hidden></div>
+  </div>
+
+{% else %}
+
+  <div class="card">
+    <div class="flex-between">
+      <h2 class="mb-0">Overview</h2>
+      <a class="btn" href="/dataset/{{ name }}/check">Check new data →</a>
+    </div>
+    <div class="stat-row" style="margin-top:14px;">
+      <div class="stat"><div class="value">{{ "{:,}".format(dataset_meta.get("total_rows", dataset_meta.get("n_rows", 0)) or 0) }}</div><div class="label">Total rows in file</div></div>
+      <div class="stat"><div class="value">{{ dataset_meta.get("n_columns", "?") }}</div><div class="label">Variables analyzed</div></div>
+      <div class="stat"><div class="value">{{ build_info.n_runs }} / {{ build_info.total_runs_in_dataset }}</div><div class="label">Runs analyzed</div></div>
+      <div class="stat"><div class="value">{{ "Yes" if build_info.include_causal else "Skipped" }}</div><div class="label">Causal discovery</div></div>
+    </div>
+    {% if dataset_meta.get("label_columns") %}
+    <p class="muted" style="margin-top:14px; margin-bottom:0;">Label variables excluded from analysis: <span class="mono">{{ dataset_meta.get("label_columns") | join(", ") }}</span></p>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <div class="flex-between">
+      <h2 class="mb-0">Variable profiling, identities &amp; roles</h2>
+      <span class="muted" style="font-size:12.5px;">Stats are deterministic (pooled across analyzed runs); hypotheses are LLM-generated — see disclaimer below</span>
+    </div>
+    <div class="column-profile-list">
+    {% for card in column_cards %}
+    <details class="hypothesis-card hypothesis-card-collapsible">
+      <summary class="column-card-header">
+        <div>
+          <span class="column-name">{{ card.column }}</span>
+          {% if card.variable_type.type %}
+          <span class="type-pill type-{{ card.variable_type.type }}">{{ card.variable_type.type }}</span>
+          {% endif %}
+        </div>
+        {% if card.identity.confidence %}
+        <span class="confidence confidence-{{ card.identity.confidence }}">{{ card.identity.confidence }}</span>
+        {% endif %}
+      </summary>
+
+      {% if card.stats %}
+      <div class="stats-panel">
+        <div class="stats-panel-main">
+          <div class="stats-grid">
+            {% if card.stats.n_distinct is not none %}<div><span class="stats-label">Distinct</span><span class="stats-value">{{ card.stats.n_distinct }} ({{ "%.1f"|format((card.stats.p_distinct or 0)*100) }}%)</span></div>{% endif %}
+            {% if card.stats.min is not none %}<div><span class="stats-label">Minimum</span><span class="stats-value">{{ "%.4g"|format(card.stats.min) }}</span></div>{% endif %}
+            {% if card.stats.n_missing is not none %}<div><span class="stats-label">Missing</span><span class="stats-value">{{ card.stats.n_missing }} ({{ "%.1f"|format((card.stats.p_missing or 0)*100) }}%)</span></div>{% endif %}
+            {% if card.stats.max is not none %}<div><span class="stats-label">Maximum</span><span class="stats-value">{{ "%.4g"|format(card.stats.max) }}</span></div>{% endif %}
+            {% if card.stats.n_infinite is not none %}<div><span class="stats-label">Infinite</span><span class="stats-value">{{ card.stats.n_infinite }} ({{ "%.1f"|format((card.stats.p_infinite or 0)*100) }}%)</span></div>{% endif %}
+            {% if card.stats.n_zeros is not none %}<div><span class="stats-label">Zeros</span><span class="stats-value">{{ card.stats.n_zeros }} ({{ "%.1f"|format((card.stats.p_zeros or 0)*100) }}%)</span></div>{% endif %}
+            {% if card.stats.mean is not none %}<div><span class="stats-label">Mean</span><span class="stats-value">{{ "%.4g"|format(card.stats.mean) }}</span></div>{% endif %}
+            {% if card.stats.n_negative is not none %}<div><span class="stats-label">Negative</span><span class="stats-value">{{ card.stats.n_negative }} ({{ "%.1f"|format((card.stats.p_negative or 0)*100) }}%)</span></div>{% endif %}
+            {% if card.stats.memory_size_display %}<div><span class="stats-label">Memory</span><span class="stats-value">{{ card.stats.memory_size_display }}</span></div>{% endif %}
+          </div>
+          {% if card.stats.alerts %}
+          <div class="alert-tags">
+            {% for a in card.stats.alerts %}<span class="alert-tag">{{ a | replace("_", " ") | lower }}</span>{% endfor %}
+          </div>
+          {% endif %}
+          {% if card.rules %}
+          <div class="column-rules">
+            {% for r in card.rules %}
+            <div class="column-rule">
+              <span>Rule: {{ r.description }}</span>
+              <form method="post" action="/dataset/{{ name }}/quality-rules/delete" class="column-rule-delete">
+                <input type="hidden" name="rule_id" value="{{ r.rule_id }}">
+                <button type="submit" title="Delete this rule">&times;</button>
+              </form>
+            </div>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+        {% if card.histogram_url %}
+        <div class="stats-panel-histogram">
+          <img src="{{ card.histogram_url }}" alt="{{ card.column }} distribution (pooled across analyzed runs)" class="mini-histogram" loading="lazy">
+          <div class="histogram-caption">Distribution, pooled across analyzed runs</div>
+        </div>
+        {% endif %}
+        {% if card.overlay_url %}
+        <div class="stats-panel-trace">
+          <img src="{{ card.overlay_url }}" alt="{{ card.column }} trace" loading="lazy">
+          <div class="histogram-caption">Time series across runs (mean, median, ±1σ)</div>
+        </div>
+        {% endif %}
+      </div>
+      {% endif %}
+
+      {% if card.stats %}
+      <div class="explain-row">
+        <button type="button" class="explain-btn btn btn-small" data-figure-type="variable_profile" data-target="{{ card.column }}">✦ Explain these graphs</button>
+        <p class="explain-output muted" hidden></p>
+      </div>
+      {% endif %}
+
+      <div class="hypothesis-tag">AI Hypothesis</div>
+      <div><strong>{{ card.identity.hypothesis or "No hypothesis generated." }}</strong></div>
+      {% if card.identity.reasoning %}<p class="muted" style="margin:6px 0 0;">{{ card.identity.reasoning }}</p>{% endif %}
+      {% if card.identity.evidence_cited %}
+      <ul class="evidence-list">
+        {% for e in card.identity.evidence_cited %}<li>{{ e }}</li>{% endfor %}
+      </ul>
+      {% endif %}
+      {% if card.variable_type.reasoning %}
+      <p class="muted" style="margin:10px 0 0; font-size:12.5px;"><strong>Measured/manipulated reasoning:</strong> {{ card.variable_type.reasoning }}</p>
+      {% endif %}
+    </details>
+    {% else %}
+    <p class="muted">No variable-identity data available.</p>
+    {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Correlation structure &amp; variable clusters</h2>
+    <div class="section-grid">
+      {% if figures.heatmap %}
+      <div class="figure">
+        <img src="{{ figures.heatmap }}" alt="Correlation heatmap">
+        <div class="figure-caption">Strongest pairwise correlations (top variables)</div>
+        <div class="explain-row" style="padding:0 12px 12px;">
+          <button type="button" class="explain-btn btn btn-small" data-figure-type="correlation_heatmap">✦ Explain this graph</button>
+          <p class="explain-output muted" hidden></p>
+        </div>
+      </div>
+      {% endif %}
+      {% if figures.clustermap %}
+      <div class="figure">
+        <img src="{{ figures.clustermap }}" alt="Variable cluster dendrogram">
+        <div class="figure-caption">Hierarchical cluster structure — which variables are closest to each other, colored by cluster</div>
+        <div class="explain-row" style="padding:0 12px 12px;">
+          <button type="button" class="explain-btn btn btn-small" data-figure-type="clustermap">✦ Explain this graph</button>
+          <p class="explain-output muted" hidden></p>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if figures.causal_graph or figures.causal_frequency %}
+  <div class="card">
+    <h2>Causal relationships (PCMCI)</h2>
+    <div class="section-grid">
+      {% if figures.causal_graph %}
+      <div class="figure"><img src="{{ figures.causal_graph }}" alt="Causal graph"><div class="figure-caption">Consensus causal links (detected in all analyzed runs)</div></div>
+      {% endif %}
+      {% if figures.causal_frequency %}
+      <div class="figure"><img src="{{ figures.causal_frequency }}" alt="Causal link frequency"><div class="figure-caption">Link robustness across runs</div></div>
+      {% endif %}
+    </div>
+    {% if figures.causal_lag_profiles %}
+    <div class="figure" style="margin-top:16px;"><img src="{{ figures.causal_lag_profiles }}" alt="Lag profiles"><div class="figure-caption">Lag profiles for the top causal pairs</div></div>
+    {% endif %}
+    <div class="explain-row">
+      <button type="button" class="explain-btn btn btn-small" data-figure-type="causal_graph">✦ Explain these graphs</button>
+      <p class="explain-output muted" hidden></p>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if cluster_cards %}
+  <div class="card">
+    <h2>Cluster role hypotheses</h2>
+    {% set cat_colors = ["--cat-1","--cat-2","--cat-3","--cat-4","--cat-5","--cat-6","--cat-7","--cat-8"] %}
+    {% for c in cluster_cards %}
+    <div class="hypothesis-card">
+      <span class="cluster-tag" style="background: var({{ cat_colors[loop.index0 % 8] }});">Cluster {{ c.cluster_id }}</span>
+      <span class="mono muted" style="font-size:12.5px; margin-left:8px;">{{ c.members | join(", ") }}</span>
+      <div class="hypothesis-tag" style="margin-top:10px;">AI Hypothesis</div>
+      <div><strong>{{ c.role.role_hypothesis or "No common theme suggested." }}</strong>
+        {% if c.role.confidence %}<span class="confidence confidence-{{ c.role.confidence }}">{{ c.role.confidence }}</span>{% endif %}
+      </div>
+      {% if c.role.reasoning %}<p class="muted" style="margin:6px 0 0;">{{ c.role.reasoning }}</p>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <p class="disclaimer">
+    Variable identities, types, and cluster roles above are LLM-generated
+    hypotheses using general domain knowledge and the statistics shown — not a
+    deterministic statistical result, and not independently verified. The
+    correlation, clustering, and causal-graph results they're grounded in are
+    deterministic and reproducible.
+  </p>
+
+{% endif %}
+{% endblock %}

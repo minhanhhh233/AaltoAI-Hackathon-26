@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Datasets — Anomoly McAnomolyface{% endblock %}
+{% block content %}
+  <h1>Choose a dataset</h1>
+  <p class="subtitle">
+    Pick a dataset to see its normal-baseline analysis, or build one if it
+    hasn't been analyzed yet. More datasets can be added in
+    <code class="mono">tpm/web/datasets.py</code>.
+  </p>
+
+  {% for ds in datasets %}
+  <div class="card dataset-card">
+    <div>
+      <h3>{{ ds.display_name }}</h3>
+      <p class="muted mb-0">{{ ds.description }}</p>
+      {% if ds.ready and ds.build_info %}
+      <p class="muted mb-0" style="font-size:12.5px; margin-top:6px;">
+        Analyzed {{ ds.build_info.n_runs }} of {{ ds.build_info.total_runs_in_dataset }} run(s)
+        {% if not ds.build_info.include_causal %}(causal discovery skipped){% endif %}
+      </p>
+      {% endif %}
+    </div>
+    <div style="text-align:right; display:flex; flex-direction:column; align-items:flex-end; gap:10px;">
+      {% if ds.ready %}
+        <span class="badge badge-ready">● Ready</span>
+      {% else %}
+        <span class="badge badge-pending">○ Not analyzed yet</span>
+      {% endif %}
+      <a class="btn" href="/dataset/{{ ds.key }}">
+        {{ "Open dashboard" if ds.ready else "Analyze" }}
+      </a>
+    </div>
+  </div>
+  {% endfor %}
+{% endblock %}

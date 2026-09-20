@@ -1,0 +1,32 @@
+# Core data handling — used by every layer
+pandas>=2.2
+numpy>=2.2
+scipy>=1.15
+
+# Layer 1: statistical profiling
+# NOT currently installed in this dev environment — install to use Layer 1.
+ydata-profiling>=4.0
+
+# Layer 2: causal discovery (PCMCI)
+# NOT currently installed in this dev environment — install to use Layer 2.
+tigramite>=5.2
+
+# Layer 2 / utils/plotting: clustering (silhouette score, KMeans for plots)
+scikit-learn>=1.6
+
+# utils/plotting: figure generation
+matplotlib>=3.10
+seaborn>=0.13
+
+# Layer 4: LLM-assisted interpretation
+openai>=1.82
+python-dotenv>=1.1
+
+# Layer 0: optional — only needed to load .RData files
+pyreadr>=0.5
+
+# Web interface (tpm/web/)
+fastapi>=0.115
+uvicorn>=0.32
+jinja2>=3.1
+python-multipart>=0.0.12

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Flags — {{ dataset.display_name }}{% endblock %}
+{% set active = "flags" %}
+{% block content %}
+
+<h1>Flags — {{ dataset.display_name }}</h1>
+<p class="subtitle">
+  Every time a run or an incoming batch got flagged for human review — a
+  missing-data threshold breach, a violated custom rule, or a rule proposed
+  through chat awaiting confirmation. Read-only for now: reviewing and
+  overriding a flag is a planned next step, not built yet.
+</p>
+
+{% if not flags %}
+<div class="card">
+  <p class="muted mb-0">No flags yet. Nothing has been raised for human review for this dataset.</p>
+</div>
+{% else %}
+<div class="flag-list">
+  {% for f in flags %}
+  <div class="flag-item {{ 'flag-item-warning' if (f.evidence and f.evidence.severity == 'warning') else '' }}">
+    <div class="flag-item-header">
+      <span class="flag-component">{{ f.component }}</span>
+      <span class="muted mono" style="font-size:12px;">{{ f.timestamp }}</span>
+    </div>
+    <div class="flag-decision">
+      {{ f.decision }}
+      {% if f.evidence and f.evidence.severity %}<span class="severity-pill {{ 'warning' if f.evidence.severity == 'warning' else 'critical' }}" style="margin-left:8px; vertical-align:middle;">{{ f.evidence.severity | upper }}</span>{% endif %}
+    </div>
+    {% if f.evidence %}
+    <ul class="evidence-list">
+      {% if f.evidence.reasons %}
+        {% for r in f.evidence.reasons %}<li>{{ r }}</li>{% endfor %}
+      {% elif f.evidence.description %}
+        <li>{{ f.evidence.column }}: {{ f.evidence.description }}</li>
+      {% else %}
+        <li class="mono">{{ f.evidence }}</li>
+      {% endif %}
+    </ul>
+    {% endif %}
+    {% if f.reasoning %}
+    <p class="muted" style="margin-top:6px; font-size:12.5px;">{{ f.reasoning }}</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+{% endblock %}

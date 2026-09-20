@@ -1,0 +1,25 @@
+# Secrets — never commit
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.venv/
+
+# Node / Playwright scratch dirs (ad-hoc screenshot testing, not part of the app)
+.pwtest/
+.pwtest2/
+node_modules/
+
+# Generated pipeline output (regenerable from source data)
+analysis_output/
+tpm/README_old.md
+
+# Large source data files (too big for git; keep the small sample CSVs)
+te_process_normal_train.csv
+
+# OS / editor
+.DS_Store
+Thumbs.db

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Anomoly McAnomolyface{% endblock %}</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%90%91%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="/static/css/style.css?v={{ static_version('css/style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">
+      <span class="brand-mark">🐑</span>
+      <span class="brand-name">Anomoly McAnomolyface</span>
+    </a>
+    {% if name %}
+    <nav class="topnav">
+      <a href="/dataset/{{ name }}" class="{{ 'active' if active == 'dashboard' else '' }}">Dashboard</a>
+      <a href="/dataset/{{ name }}/check" class="{{ 'active' if active == 'check' else '' }}">Check New Data</a>
+      <a href="/dataset/{{ name }}/flags" class="{{ 'active' if active == 'flags' else '' }}">Flags</a>
+    </nav>
+    {% endif %}
+  </header>
+
+  <main class="page">
+    {% block content %}{% endblock %}
+  </main>
+
+  {% if name and ready %}
+  <div id="chat-widget" class="chat-widget collapsed">
+    <button id="chat-toggle" class="chat-toggle" aria-label="Toggle chat">
+      <span class="chat-toggle-icon">💬</span> Ask about this dataset
+    </button>
+    <div class="chat-panel">
+      <div class="chat-panel-header">
+        <span>Ask about {{ dataset.display_name if dataset else name }}</span>
+        <button id="chat-close" class="chat-close" aria-label="Close chat">×</button>
+      </div>
+      <div id="chat-messages" class="chat-messages">
+        <div class="chat-msg chat-msg-assistant">
+          Ask me anything about this dataset's analysis — I only answer from
+          the computed report below, and I'll say so if something isn't in it.
+          You can also teach me a data-quality rule in plain English (e.g.
+          "xmeas_7 should always be between 0 and 100") and I'll draft it for
+          you to confirm.
+        </div>
+      </div>
+      <form id="chat-form" class="chat-form">
+        <input id="chat-input" type="text" placeholder="e.g. Which variables are most correlated?" autocomplete="off">
+        <button type="submit">Send</button>
+      </form>
+    </div>
+  </div>
+  <script>window.TPM_DATASET = {{ name | tojson }};</script>
+  {% endif %}
+
+  <script src="/static/js/app.js?v={{ static_version('js/app.js') }}"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

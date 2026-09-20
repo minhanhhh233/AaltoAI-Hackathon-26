@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Check new data — {{ dataset.display_name }}{% endblock %}
+{% set active = "check" %}
+{% block content %}
+
+<h1>Check new data — {{ dataset.display_name }}</h1>
+<p class="subtitle">
+  Upload a CSV with the same variables as the baseline (one run's worth of
+  samples). It's scored against the baseline built for this dataset —
+  statistical drift, correlation drift, and CUSUM onset detection (Layer 3),
+  then a ranked root-cause hypothesis (Layer 4). In a real deployment this
+  would come from a log system rather than a manual upload.
+</p>
+
+{% if not ready %}
+  <div class="alert alert-info">
+    This dataset's baseline hasn't been built yet.
+    <a href="/dataset/{{ name }}">Build it first</a>.
+  </div>
+{% else %}
+
+  <div class="card">
+    <form id="check-form" action="/dataset/{{ name }}/check" method="post" enctype="multipart/form-data">
+      <div class="field">
+        <label for="file">Run data (CSV)</label>
+        <input type="file" id="file" name="file" accept=".csv" required>
+        <div class="hint">Must contain the same sensor/measurement variables as the baseline dataset.</div>
+      </div>
+      <button type="submit" class="btn" id="check-submit">Check this run</button>
+      <span id="check-spinner" class="muted" style="margin-left:12px;" hidden>Scoring against baseline…</span>
+    </form>
+  </div>
+
+  {% if error %}
+  <div class="alert alert-error">{{ error }}</div>
+  {% endif %}
+
+  {% if result %}
+  {% set rs = result.run_summary %}
+  {% if rs.data_quality_gate == "failed" %}
+  <div class="quality-banner critical">
+    <div>
+      <strong>Data quality gate failed — fault/drift analysis was NOT performed on this run.</strong>
+      <p class="mb-0" style="margin-top:6px;">The numbers below can't be trusted, so no anomaly score was
+      computed rather than reporting a possibly-meaningless one. Reasons:</p>
+      <ul>
+        {% for reason in rs.data_quality.reasons %}<li>{{ reason }}</li>{% endfor %}
+      </ul>
+    </div>
+  </div>
+  {% elif rs.data_quality_gate == "warning" %}
+  <div class="quality-banner warning">
+    <div>
+      <strong>Data quality note</strong> (analysis proceeded, but worth knowing):
+      <ul>
+        {% for reason in rs.data_quality.reasons %}<li>{{ reason }}</li>{% endfor %}
+      </ul>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="card">
+    {% if rs.data_quality_gate == "failed" %}
+    <div class="score-hero">
+      <span class="score-value muted">N/A</span>
+      <span class="severity-pill critical">DATA QUALITY GATE FAILED</span>
+    </div>
+    <p class="muted mb-0">No anomaly score for run <span class="mono">{{ result.run_label }}</span> — see reasons above.</p>
+    {% else %}
+    <div class="score-hero">
+      <span class="score-value severity-{{ result.severity }}">{{ "%.3f" | format(rs.anomaly_score or 0) }}</span>
+      <span class="severity-pill {{ result.severity }}">{{ result.severity | upper }}</span>
+    </div>
+    <p class="muted mb-0">Composite anomaly score (0–1) for run <span class="mono">{{ result.run_label }}</span></p>
+
+    <div class="stat-row" style="margin-top:20px;">
+      <div class="stat"><div class="value">{{ "%.0f%%" | format((rs.frac_mean_drifted or 0) * 100) }}</div><div class="label">Mean shift</div></div>
+      <div class="stat"><div class="value">{{ "%.0f%%" | format((rs.frac_var_drifted or 0) * 100) }}</div><div class="label">Variance</div></div>
+      <div class="stat"><div class="value">{{ "%.0f%%" | format((rs.frac_corr_drifted or 0) * 100) }}</div><div class="label">Correlation</div></div>
+      <div class="stat"><div class="value">{{ "%.0f%%" | format((rs.frac_onset_detected or 0) * 100) }}</div><div class="label">Onset (CUSUM)</div></div>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if rs.data_quality_gate != "failed" %}
+
+  {% if result.figures.breakdown %}
+  <div class="card">
+    <h2>Drift breakdown</h2>
+    <div class="figure"><img src="{{ result.figures.breakdown }}" alt="Drift breakdown"></div>
+  </div>
+  {% endif %}
+
+  {% if result.figures.propagation %}
+  <div class="card">
+    <h2>Onset &amp; propagation order</h2>
+    <p class="muted">Which variable drifted first, and in what order — the direct answer to "since when, and what happened next."</p>
+    <div class="figure"><img src="{{ result.figures.propagation }}" alt="Onset propagation timeline"></div>
+  </div>
+  {% endif %}
+
+  <div class="section-grid">
+    {% if result.figures.statistical %}
+    <div class="figure"><img src="{{ result.figures.statistical }}" alt="Statistical drift"><div class="figure-caption">Top mean-drifted variables (z-score vs. baseline)</div></div>
+    {% endif %}
+  </div>
+
+  {% if result.figures.variables %}
+  <div class="card">
+    <h2>Drifted variables in detail</h2>
+    <p class="muted">Raw trace vs. baseline normal range (shaded), with the detected onset point marked.</p>
+    <div class="figure"><img src="{{ result.figures.variables }}" alt="Variable traces with onset"></div>
+  </div>
+  {% endif %}
+
+  {% if result.root_cause %}
+  <div class="card">
+    <div class="flex-between">
+      <h2 class="mb-0">Root cause hypotheses</h2>
+      <span class="muted" style="font-size:12.5px;">LLM-generated, ranked by strength of evidence</span>
+    </div>
+    {% for h in result.root_cause.hypotheses %}
+    <div class="hypothesis-card">
+      <div class="hypothesis-tag">Hypothesis #{{ h.rank }}{% if h.confidence %} · {{ h.confidence }} confidence{% endif %}</div>
+      <div><strong>{{ h.hypothesis }}</strong></div>
+      {% if h.implicated_variables %}
+      <p class="mono muted" style="margin:6px 0 0; font-size:12.5px;">Implicated: {{ h.implicated_variables | join(", ") }}</p>
+      {% endif %}
+      {% if h.supporting_evidence %}
+      <ul class="evidence-list">
+        {% for e in h.supporting_evidence %}<li>{{ e }}</li>{% endfor %}
+      </ul>
+      {% endif %}
+      {% if h.caveats %}
+      <p class="muted" style="margin-top:8px; font-size:12.5px;"><strong>Caveats:</strong> {{ h.caveats }}</p>
+      {% endif %}
+    </div>
+    {% else %}
+    <p class="muted">No root-cause hypothesis generated{% if result.root_cause.error %}: {{ result.root_cause.error }}{% endif %}.</p>
+    {% endfor %}
+    <p class="disclaimer">{{ result.root_cause.disclaimer }}</p>
+  </div>
+  {% else %}
+  <div class="card">
+    <p class="muted mb-0">
+      This run scored <strong>{{ result.severity | upper }}</strong> — not anomalous enough to warrant a
+      root-cause hypothesis. Root-cause analysis only runs for <strong>SERIOUS</strong> or
+      <strong>CRITICAL</strong> scores, where something is actually likely wrong to explain.
+    </p>
+  </div>
+  {% endif %}
+  {% endif %}
+
+  {% endif %}
+{% endif %}
+{% endblock %}
